@@ -1,0 +1,45 @@
+# ====================## 17:44081064 (rs8070723) ==================== MAPT	--chr 17 --from-bp 43971748 --to-bp 44105799  ====================
+
+cd MAPT
+plink --bfile /data/LNG/saraB/IPDGC_data --geno 0.05 --chr 17 --from-bp 43971748 --to-bp 44105799 --make-bed --out MAPT_full_gene_GWAS
+#decode to extract carriers and non-carriers
+plink --bfile MAPT_full_gene_GWAS --chr 17 --from-bp 44081064 --to-bp 44081064 --recode A --out rs8070723
+
+# Use ".raw" file to select only carriers
+R
+library(data.table)
+library(tidyr)
+library(dplyr)
+data <- fread("rs8070723.raw")
+covar <- fread("/data/LNG/saraB/IPDGC_all_samples_covariates.tab")
+covar_updated <- merge(data, covar, by.x = "IID", by.y="IID")
+covar_updated <- rename(covar_updated, FID = FID.x)
+
+#Create new covar and pheno with only carriers of 17:44081064 (rs8070723)
+carriers <- subset(covar_updated, covar_updated$"17:44081064_G">0) ## To grep both het and hom
+write.table(carriers, 'rs8070723_carriers.txt', col.names = TRUE, row.names=FALSE, na="", quote = FALSE, sep="\t")
+data_selected <- carriers[,c("FID","IID","MAT", "PAT","SEX", "PHENOTYPE", "AGE", "PC1", "PC2", "PC3", "PC4", "PC5", "PC6", "PC7", "PC8", "PC9", "PC10")]
+write.table(data_selected, file="IPDGC_covar_carriers.txt", row.names=FALSE, quote=FALSE, sep = "\t")
+data_selected2 <- carriers[,c("FID","IID","PHENOTYPE")]
+write.table(data_selected2, file="pheno_carriers.txt",row.names=FALSE, quote=FALSE, sep = "\t")
+
+#Create new covar and pheno with only non-carriers of 17:44081064 (rs8070723)
+non_carriers <- subset(covar_updated, covar_updated$"17:44081064_G"==0)
+write.table(non_carriers, 'rs8070723_non_carriers.txt', col.names = TRUE, row.names=FALSE, na="", quote = FALSE, sep="\t")
+data_selected_all <- non_carriers[,c("FID","IID","MAT", "PAT","SEX", "PHENOTYPE", "AGE", "PC1", "PC2", "PC3", "PC4", "PC5", "PC6", "PC7", "PC8", "PC9", "PC10")]
+write.table(data_selected_all, file="IPDGC_covar_non_carriers.txt", row.names=FALSE, quote=FALSE, sep = "\t")
+data_selected2 <- non_carriers[,c("FID","IID","PHENOTYPE")]
+write.table(data_selected2, file="pheno_non_carriers.txt",row.names=FALSE, quote=FALSE, sep = "\t")
+
+
+#==========Run GWAS where phenotype is carriers_cases/carriers_controls and non-carriers_cases/non_carriers_controls=============================
+
+#carriers_cases/carriers_controls
+plink --bfile /data/LNG/saraB/IPDGC_data --pheno pheno_carriers.txt --geno 0.05 --maf 0.01 --out rs8070723_carriers --make-bed
+plink --bfile rs8070723_carriers --logistic --ci 0.95 --covar IPDGC_covar_carriers.txt --covar-name SEX, AGE,PC1, PC2, PC3, PC4, PC5, PC6, PC7, PC8, PC9, PC10 --out MAPT_rs8070723_GWAS_carriers
+
+
+#non-carriers_cases/non_carriers_controls
+plink --bfile /data/LNG/saraB/IPDGC_data --pheno pheno_non_carriers.txt --geno 0.05 --maf 0.01 --out rs8070723_non_carriers --make-bed
+plink --bfile rs8070723_non_carriers --logistic --ci 0.95 --covar IPDGC_covar_non_carriers.txt --covar-name SEX, AGE,PC1, PC2, PC3, PC4, PC5, PC6, PC7, PC8, PC9, PC10 --out MAPT_rs8070723_GWAS_non_carriers
+
